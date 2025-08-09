@@ -1,40 +1,702 @@
 <!doctype html>
-
 <html lang="ko">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>다빈치 코드 — 1대1</title>
+<title>다빈치 코드 — 1대1 (업그레이드)</title>
 <style>
-  :root{--bg:#0b0f14;--card:#f8f8f4;--dark:#101217;--accent:#c75b7a}
-  html,body{height:100%;margin:0;font-family:Inter, 'Noto Sans KR', system-ui; background:linear-gradient(180deg,#071018 0%, #0b1116 100%);color:#eef2f6}
-  .wrap{max-width:980px;margin:28px auto;padding:18px}
-  header{display:flex;align-items:center;justify-content:space-between}
+  :root{
+    --bg:#071018;
+    --panel:#0f1418;
+    --muted:#9fb3c6;
+    --accent:#e86f6f;
+    --input-bg:#f4fbff;
+    --input-border:#4da3ff;
+    --card-w:72px;
+    --card-h:104px;
+  }
+  html,body{height:100%;margin:0;font-family:Inter, 'Noto Sans KR', system-ui, -apple-system;background:linear-gradient(180deg,#071018 0%, #0b1116 100%);color:#eef2f6}
+  .wrap{max-width:1100px;margin:18px auto;padding:18px}
+  header{display:flex;align-items:center;justify-content:space-between;gap:12px}
   h1{margin:0;font-size:1.4rem}
-  .board{display:flex;flex-direction:column;gap:18px;margin-top:18px}
-  .players{display:flex;justify-content:space-between;gap:12px}
-  .player{flex:1;background:rgba(255,255,255,0.03);padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.04)}
-  .row{display:flex;gap:10px;flex-wrap:wrap}
-  .card{width:68px;height:96px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;box-shadow:0 6px 18px rgba(0,0,0,0.6);cursor:pointer;user-select:none}
-  .card.front{background:var(--card);color:#111;border:2px solid rgba(0,0,0,0.06)}
-  .card.back{background:linear-gradient(180deg,#2b2e35,#1b1d22);color:#fff;border:2px solid rgba(255,255,255,0.03);position:relative}
-  .card.revealed{opacity:0.48;transform:scale(0.98);cursor:default}
-  .controls{display:flex;gap:12px;align-items:center}
-  select,input[type=number]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.28);color:#eef2f6}
-  button{padding:8px 12px;border-radius:8px;background:linear-gradient(180deg,#ba3a45,#8b2430);color:white;border:none;cursor:pointer}
-  .log{margin-top:12px;background:rgba(0,0,0,0.25);padding:12px;border-radius:8px;min-height:80px}
-  .status{margin-top:6px;color:#b7c3cc;font-size:14px}
-  .small{font-size:13px;color:#aab5bf}
-  /* responsive */
-  @media (max-width:720px){.card{width:56px;height:80px;font-size:18px}}
+  .top-controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  select,input[type=text]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.28);color:#eef2f6}
+  .btn{padding:8px 12px;border-radius:8px;background:linear-gradient(180deg,#c94b4b,#8b2b2b);color:white;border:none;cursor:pointer}
+  .btn.secondary{background:linear-gradient(180deg,#2b6b9a,#1b405a)}
+  .btn:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,0.55)}
+  main{margin-top:18px;display:flex;gap:18px}
+  .leftpane{flex:1;min-width:360px}
+  .rightpane{width:360px}
+  .panel{background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:12px;border-radius:12px;border:1px solid rgba(255,255,255,0.03)}
+  .zone{padding:12px;border-radius:8px;background:rgba(0,0,0,0.22);margin-bottom:12px}
+  .area-title{font-size:13px;color:var(--muted);margin-bottom:8px}
+  /* card area */
+  .table{position:relative;height:420px;border-radius:12px;background:linear-gradient(180deg,#081018,#071018);overflow:hidden;display:flex;flex-direction:column;gap:12px;padding:12px}
+  .deck-area{position:relative;height:160px;border-radius:8px;background:linear-gradient(180deg,#0b1a22,#061216);display:flex;align-items:center;justify-content:center;gap:6px}
+  .hand-row{display:flex;gap:10px;align-items:center;justify-content:center}
+  /* card base */
+  .card {
+    width:var(--card-w); height:var(--card-h); border-radius:10px;
+    position:relative; transform-style:preserve-3d; transition:transform 360ms cubic-bezier(.2,.9,.3,1), opacity 300ms;
+    box-shadow:0 10px 30px rgba(0,0,0,0.6); cursor:grab; user-select:none;
+  }
+  .card.grabbing{cursor:grabbing}
+  .card-face, .card-back {
+    position:absolute; inset:0; border-radius:10px; backface-visibility:hidden; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:20px;
+  }
+  .card-front { transform:rotateY(0deg); }
+  .card-back  { transform:rotateY(180deg); }
+  .card.flipped { transform: rotateY(180deg); } /* when flipped show back */
+  /* styles */
+  .white .card-face { background:#fff; color:#0b0b0b; border:2px solid rgba(0,0,0,0.06) }
+  .black .card-face { background:linear-gradient(180deg,#151819,#0e0f11); color:#fff; border:2px solid rgba(255,255,255,0.04) }
+  .joker .card-face { background:linear-gradient(180deg,#fff8e1,#fff0c4); color:#4b2e00; border:2px dashed #c78f3b }
+  .back .card-back { background:linear-gradient(180deg,#2b2e35,#1b1d22); color:#fff; border:2px solid rgba(255,255,255,0.03); font-size:12px; opacity:0.95 }
+  /* hidden / revealed */
+  .revealed { opacity:0.78; transform:translateY(0) scale(0.98); cursor:default }
+  /* animation for shuffle 'scatter' */
+  .scatter { animation:scatterAnim 700ms ease-in-out forwards; }
+  @keyframes scatterAnim{
+    0%{ transform:translate(0,0) rotate(0deg) }
+    25%{ transform:translate(-60px,-36px) rotate(-12deg) }
+    50%{ transform:translate(40px,-28px) rotate(18deg) }
+    75%{ transform:translate(-24px,36px) rotate(-8deg) }
+    100%{ transform:translate(0,0) rotate(0deg) }
+  }
+  /* dealing animation: we will set left/top dynamically */
+  .floating { position:absolute; transition: all 700ms cubic-bezier(.2,.9,.3,1), transform 400ms; z-index:30 }
+  /* flip animation for reveal */
+  .flip-wrap { perspective:1000px }
+  .card-inner { transition: transform 400ms; transform-style: preserve-3d; }
+  .card.show-front .card-front { transform: rotateY(0deg); } 
+  .card.show-front .card-back  { transform: rotateY(180deg); }
+  .card.show-back  .card-front { transform: rotateY(-180deg); }
+  .card.show-back  .card-back  { transform: rotateY(0deg); }
+
+  /* input bright */
+  .bright-input{
+    background:var(--input-bg); color:#07121a; border:2px solid var(--input-border); font-weight:700;
+    padding:10px;border-radius:8px; width:96px; text-align:center; box-shadow:0 6px 18px rgba(16,24,40,0.6);
+  }
+  .bright-input:focus{ outline:3px solid rgba(77,163,255,0.12); box-shadow:0 10px 30px rgba(17,45,80,0.4) }
+
+  /* small UI tweaks */
+  .log{height:220px; overflow:auto; padding:8px; background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); border-radius:8px; margin-top:8px}
+  .turn-badge{font-weight:800;padding:8px 12px;border-radius:10px;background:linear-gradient(90deg,#2b6b9a,#1b405a);color:#fff}
+  .hint{font-size:13px;color:var(--muted)}
+  @media (max-width:980px){ main{flex-direction:column} .rightpane{width:100%} .table{height:520px} }
 </style>
 </head>
 <body>
   <div class="wrap">
     <header>
-      <h1>다빈치 코드 — 1대1 (컴퓨터 상대)</h1>
-      <div class="small">카드 0~11 중 숫자를 추리하세요. 컴퓨터 난이도 선택 가능</div>
-    </header><section class="board">
+      <div>
+        <h1>다빈치 코드 — 1대1 (섞기·배치·애니메이션 포함)</h1>
+        <div class="hint">화이트/블랙 0–11, 각 색 조커 1장. 시작 전 조커 위치를 직접 배치할 수 있습니다.</div>
+      </div>
+      <div class="top-controls">
+        <label>카드 수:
+          <select id="cardCount"><option>4</option><option selected>6</option><option>8</option></select>
+        </label>
+        <label>컴퓨터 난이도:
+          <select id="aiLevel"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select>
+        </label>
+        <button id="newBtn" class="btn">새 게임 (섞기)</button>
+        <button id="placeJokerBtn" class="btn secondary">조커 배치 모드</button>
+        <div style="display:flex;align-items:center;gap:8px">
+          <div class="turn-badge" id="turnBadge">준비</div>
+        </div>
+      </div>
+    </header>
+
+    <main>
+      <div class="leftpane">
+        <section class="panel table" id="table">
+          <div class="zone deck-area" id="deckArea">
+            <!-- deck scatter + dealing happens here -->
+            <div class="area-title">덱 (섞기 연출)</div>
+          </div>
+
+          <div class="zone">
+            <div class="area-title">컴퓨터의 카드</div>
+            <div id="computerRow" class="hand-row" style="min-height:120px"></div>
+          </div>
+
+          <div class="zone">
+            <div class="area-title">플레이어의 카드 (조커를 드래그하여 원하는 위치에 놓으세요)</div>
+            <div id="playerRow" class="hand-row" style="min-height:140px"></div>
+          </div>
+        </section>
+      </div>
+
+      <aside class="rightpane">
+        <div class="panel">
+          <div class="area-title">추측</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <label>타겟 인덱스 <input id="targetIdx" type="number" min="1" class="bright-input" style="width:86px" /></label>
+            <label>예상값 <input id="guessVal" type="text" maxlength="2" class="bright-input" placeholder="0-11 또는 J" /></label>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:10px">
+            <button id="guessBtn" class="btn">추측 실행</button>
+            <button id="revealBtn" class="btn secondary">카드 뒤집기(테스트)</button>
+          </div>
+
+          <div class="area-title" style="margin-top:12px">게임 로그</div>
+          <div id="log" class="log"></div>
+
+          <div class="area-title" style="margin-top:10px">상태</div>
+          <div id="status" class="hint">아직 게임 시작 안됨</div>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+<script>
+(() => {
+  // --- utilities ---
+  const $ = sel => document.querySelector(sel);
+  const $$ = sel => Array.from(document.querySelectorAll(sel));
+  function randShuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]] } }
+  function el(tag, cls=''){ const e = document.createElement(tag); if(cls) e.className = cls; return e; }
+
+  // --- DOM ---
+  const deckArea = $('#deckArea');
+  const computerRow = $('#computerRow');
+  const playerRow = $('#playerRow');
+  const newBtn = $('#newBtn');
+  const placeJokerBtn = $('#placeJokerBtn');
+  const guessBtn = $('#guessBtn');
+  const revealBtn = $('#revealBtn');
+  const targetIdxIn = $('#targetIdx');
+  const guessValIn = $('#guessVal');
+  const logEl = $('#log');
+  const statusEl = $('#status');
+  const turnBadge = $('#turnBadge');
+  const cardCountSel = $('#cardCount');
+  const aiLevelSel = $('#aiLevel');
+
+  // --- game state ---
+  let deck = [];
+  let playerHand = [];
+  let computerHand = [];
+  let playerRevealed = [];
+  let computerRevealed = [];
+  let cardCount = Number(cardCountSel.value);
+  let aiLevel = aiLevelSel.value;
+  let turn = 'player'; // 'player' or 'computer' or 'ended'
+  let jokerPlaceMode = false;
+  let draggingCard = null;
+  let animElements = [];
+
+  // build deck 26 cards: white 0..11, black 0..11, white joker, black joker
+  function buildDeck(){
+    const d = [];
+    for(let v=0; v<=11; v++) d.push({color:'white', val:v, isJoker:false});
+    for(let v=0; v<=11; v++) d.push({color:'black', val:v, isJoker:false});
+    d.push({color:'white', val:null, isJoker:true});
+    d.push({color:'black', val:null, isJoker:true});
+    return d;
+  }
+
+  // create card element (floating for deck or static for hand)
+  function createCardEl(card, opts = {}) {
+    // opts: back(boolean), floating(boolean), id index for data
+    const wrapper = el('div', 'card ' + (card.isJoker ? 'joker' : (card.color==='white' ? 'white' : 'black')));
+    // front face
+    const face = el('div', 'card-face card-front');
+    face.textContent = card.isJoker ? 'J' : String(card.val);
+    // back face
+    const back = el('div', 'card-back card-backside');
+    back.textContent = '뒷면';
+    wrapper.appendChild(face);
+    wrapper.appendChild(back);
+    if(opts.floating) wrapper.classList.add('floating');
+    if(opts.back) wrapper.classList.add('back');
+    if(typeof opts.index !== 'undefined') wrapper.dataset.index = opts.index;
+    // store card info
+    wrapper.dataset.color = card.color;
+    wrapper.dataset.isJoker = card.isJoker ? '1':'0';
+    wrapper.dataset.val = card.val===null ? '' : String(card.val);
+    // flip state handled by class .show-back / .show-front
+    return wrapper;
+  }
+
+  // render scatter deck for shuffle animation
+  function renderDeckScatter(){
+    // clear
+    deckArea.innerHTML = '';
+    animElements = [];
+    // create visual small deck cards scattered
+    for(let i=0;i<18;i++){
+      const c = createCardEl({color:'black', val:null, isJoker:false}, {floating:true, back:true});
+      c.style.left = `${(deckArea.clientWidth/2) - 40 + (Math.random()*160-80)}px`;
+      c.style.top  = `${20 + Math.random()*40}px`;
+      c.classList.add('scatter');
+      deckArea.appendChild(c);
+      animElements.push(c);
+    }
+  }
+
+  // deal animation: create floating copies and move to positions
+  function animateDeal(callback){
+    // clear rows visually
+    computerRow.innerHTML = '';
+    playerRow.innerHTML = '';
+    // compute target positions for player's and computer's cards (centered)
+    const playerTargets = [];
+    const computerTargets = [];
+    const baseX = playerRow.getBoundingClientRect().left + window.scrollX;
+    const baseY = playerRow.getBoundingClientRect().top + window.scrollY;
+    const cbaseX = computerRow.getBoundingClientRect().left + window.scrollX;
+    const cbaseY = computerRow.getBoundingClientRect().top + window.scrollY;
+    // create floating card elements from deck slice
+    const total = cardCount * 2;
+    const taken = deck.slice(0, total);
+    // create positions: center row spacing
+    const spacing = 88;
+    const startPX = playerRow.getBoundingClientRect().left + (playerRow.clientWidth/2) - ( (cardCount-1) * spacing / 2 );
+    const startCX = computerRow.getBoundingClientRect().left + (computerRow.clientWidth/2) - ( (cardCount-1) * spacing / 2 );
+    for(let i=0;i<cardCount;i++){
+      playerTargets.push({
+        left: startPX + i*spacing - deckArea.getBoundingClientRect().left,
+        top: playerRow.getBoundingClientRect().top - deckArea.getBoundingClientRect().top
+      });
+      computerTargets.push({
+        left: startCX + i*spacing - deckArea.getBoundingClientRect().left,
+        top: computerRow.getBoundingClientRect().top - deckArea.getBoundingClientRect().top
+      });
+    }
+
+    // create floating cards centered in deckArea
+    const centerX = deckArea.clientWidth/2 - 36;
+    const centerY = deckArea.clientHeight/2 - 52;
+    // clear any previous
+    deckArea.innerHTML = '';
+    const floats = [];
+    for(let i=0;i<total;i++){
+      const card = taken[i];
+      const c = createCardEl(card, {floating:true, back:true, index:i});
+      c.style.left = `${centerX + (Math.random()*24-12)}px`;
+      c.style.top  = `${centerY + (Math.random()*24-12)}px`;
+      c.style.zIndex = 40 + i;
+      deckArea.appendChild(c);
+      floats.push(c);
+    }
+
+    // now animate sequentially to targets: alternate deal to player and computer
+    let step = 0;
+    function dealStep(){
+      if(step >= total){ // after dealing, cleanup floating and create real hand elements
+        // small pause
+        setTimeout(()=> {
+          deckArea.innerHTML = '';
+          // create computerRow backs and playerRow fronts
+          for(let i=0;i<cardCount;i++){
+            const pc = createCardEl(computerHand[i], {back:true});
+            pc.classList.add('show-front'); // show back side by default by class handling
+            pc.dataset.idx = i;
+            computerRow.appendChild(pc);
+
+            const pl = createCardEl(playerHand[i], {back:false});
+            pl.classList.add('revealed'); // player's cards face-up
+            pl.dataset.idx = i;
+            // enable possible drag for jokers (only for player's cards)
+            if(playerHand[i].isJoker) {
+              pl.style.cursor = 'grab';
+              makeDraggable(pl, i);
+            }
+            playerRow.appendChild(pl);
+          }
+          // finalize UI
+          appendLog('카드 분배 완료. 조커를 원하는 위치에 배치(배치 모드에서).');
+          updateStatus();
+          if(typeof callback === 'function') callback();
+        }, 220);
+        return;
+      }
+      const idx = step;
+      const target = (step % 2 === 0) ? computerTargets[Math.floor(step/2)] : playerTargets[Math.floor(step/2)];
+      const floatEl = floats[step];
+      // move float to target (relative to deckArea)
+      floatEl.style.left = `${target.left}px`;
+      floatEl.style.top = `${target.top}px`;
+      floatEl.style.transform = `translateZ(0) rotate(${(Math.random()*20-10)}deg)`;
+      // small delay per card
+      setTimeout(()=>{ step++; dealStep(); }, 120 + Math.random()*120);
+    }
+    dealStep();
+  }
+
+  // make element draggable within playerRow for joker placement
+  function makeDraggable(cardEl, idx){
+    // pointer-based drag
+    let offsetX=0, offsetY=0, startX=0, startY=0;
+    let originRect = null;
+    cardEl.addEventListener('pointerdown', (e)=>{
+      if(!jokerPlaceMode) return;
+      draggingCard = cardEl;
+      cardEl.setPointerCapture(e.pointerId);
+      cardEl.classList.add('grabbing');
+      const r = cardEl.getBoundingClientRect();
+      originRect = r;
+      offsetX = e.clientX - r.left;
+      offsetY = e.clientY - r.top;
+      startX = r.left; startY = r.top;
+      // make absolute positioned on top of everything
+      cardEl.style.position = 'absolute';
+      cardEl.style.zIndex = 9999;
+      const parentRect = playerRow.getBoundingClientRect();
+      cardEl.style.left = `${r.left - parentRect.left}px`;
+      cardEl.style.top  = `${r.top - parentRect.top}px`;
+      playerRow.appendChild(cardEl);
+    });
+    cardEl.addEventListener('pointermove', (e)=>{
+      if(draggingCard !== cardEl) return;
+      const parentRect = playerRow.getBoundingClientRect();
+      let nx = e.clientX - parentRect.left - offsetX;
+      let ny = e.clientY - parentRect.top - offsetY;
+      // clamp
+      nx = Math.max(-20, Math.min(playerRow.clientWidth - 20, nx));
+      ny = Math.max(-20, Math.min(playerRow.clientHeight - 20, ny));
+      cardEl.style.left = nx + 'px';
+      cardEl.style.top  = ny + 'px';
+    });
+    cardEl.addEventListener('pointerup', (e)=>{
+      if(draggingCard !== cardEl) return;
+      cardEl.releasePointerCapture(e.pointerId);
+      cardEl.classList.remove('grabbing');
+      // determine nearest slot index based on center x
+      const parentRect = playerRow.getBoundingClientRect();
+      const cx = e.clientX - parentRect.left;
+      const spacing = playerRow.children.length ? (playerRow.clientWidth / Math.max(1, playerRow.children.length)) : 80;
+      let chosen = 0;
+      // compute positions for default slots
+      const slots = [];
+      const count = playerRow.children.length;
+      const base = (playerRow.clientWidth/2) - ((count-1) * 88 / 2);
+      for(let i=0;i<count;i++){
+        slots.push(base + i*88 + varCardHalf());
+      }
+      // find nearest
+      let minD = Infinity;
+      for(let i=0;i<slots.length;i++){
+        const d = Math.abs(cx - slots[i]);
+        if(d < minD){ minD = d; chosen = i; }
+      }
+      // move DOM element to chosen slot by rearranging playerHand array: move element idx to chosen
+      // first find original index in DOM
+      const domKids = Array.from(playerRow.children);
+      const origIdx = domKids.indexOf(cardEl);
+      if(origIdx === -1) {
+        // fallback: just append
+        cardEl.style.position = '';
+        cardEl.style.left = '';
+        cardEl.style.top = '';
+        cardEl.style.zIndex = '';
+        draggingCard = null;
+        return;
+      }
+      // reposition in data
+      const moved = playerHand.splice(origIdx,1)[0];
+      playerHand.splice(chosen,0,moved);
+      const revealedMoved = playerRevealed.splice(origIdx,1)[0];
+      playerRevealed.splice(chosen,0,revealedMoved);
+      // rerender player row
+      renderHandsAfterPlacement();
+      appendLog(`조커(또는 카드)를 ${chosen+1}번 슬롯으로 배치했습니다.`);
+      draggingCard = null;
+    });
+    // helper half width
+    function varCardHalf(){ return (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--card-w')) || 72)/2; }
+  }
+
+  function renderHandsAfterPlacement(){
+    // clear and re-render player's cards with correct order; preserve reveal states
+    playerRow.innerHTML = '';
+    for(let i=0;i<playerHand.length;i++){
+      const card = playerHand[i];
+      const cel = createCardEl(card, {back:false});
+      if(playerRevealed[i]) cel.classList.add('revealed');
+      cel.dataset.idx = i;
+      if(card.isJoker && jokerPlaceMode) {
+        makeDraggable(cel, i);
+      }
+      playerRow.appendChild(cel);
+    }
+    // re-render computer (unchanged)
+    computerRow.innerHTML = '';
+    for(let i=0;i<computerHand.length;i++){
+      const ccard = computerHand[i];
+      const cel = createCardEl(ccard, {back:true});
+      cel.classList.add('show-front'); // show back
+      cel.dataset.idx = i;
+      computerRow.appendChild(cel);
+    }
+  }
+
+  // set up new game: build deck, shuffle, take top (2*cardCount) and assign
+  function startNewGame(){
+    cardCount = Number(cardCountSel.value);
+    aiLevel = aiLevelSel.value;
+    deck = buildDeck();
+    randShuffle(deck);
+    appendLog('덱 생성 및 랜덤 섞기...');
+    // render scatter
+    renderDeckScatter();
+    // short wait then animate deal
+    setTimeout(()=>{
+      // pick top 2*cardCount
+      const total = cardCount*2;
+      const taken = deck.slice(0,total);
+      // split evenly: first half -> player, second half -> computer (we randomize order of distribution by shuffle taken)
+      randShuffle(taken);
+      playerHand = taken.slice(0,cardCount);
+      computerHand = taken.slice(cardCount,total);
+      // ensure sorting of player/computer as game rule requires: put jokers left then sort by val asc then white before black
+      playerHand = sortHand(playerHand);
+      computerHand = sortHand(computerHand);
+      // reveal arrays
+      playerRevealed = Array(cardCount).fill(true); // player sees own cards
+      computerRevealed = Array(cardCount).fill(false);
+      // animate deal into positions in deckArea coordinates
+      animateDeal(()=>{
+        // after dealing done
+        turn = 'player';
+        updateUI();
+      });
+    }, 800);
+  }
+
+  // sort helper: jokers first; then val asc; white before black
+  function sortHand(hand){
+    const arr = hand.slice();
+    arr.sort((a,b)=>{
+      if(a.isJoker && !b.isJoker) return -1;
+      if(!a.isJoker && b.isJoker) return 1;
+      if(a.val !== b.val) return (a.val - b.val);
+      if(a.color === b.color) return 0;
+      return a.color === 'white' ? -1 : 1;
+    });
+    return arr;
+  }
+
+  // popup log
+  function appendLog(txt){
+    const p = document.createElement('div'); p.innerHTML = txt;
+    logEl.appendChild(p); logEl.scrollTop = logEl.scrollHeight;
+  }
+
+  function updateUI(){
+    turnBadge.textContent = (turn === 'player') ? '플레이어 차례' : (turn === 'computer') ? '컴퓨터 차례' : '게임 종료';
+    statusEl.textContent = `남은 카드 - 플레이어: ${playerRevealed.filter(x=>!x).length}장, 컴퓨터: ${computerRevealed.filter(x=>!x).length}장`;
+  }
+
+  function revealComputerCard(idx){
+    if(computerRevealed[idx]) return;
+    computerRevealed[idx] = true;
+    // flip animation: find element and apply show-back (we created them with back shown)
+    const cel = computerRow.children[idx];
+    if(cel){
+      cel.classList.add('revealed');
+      // replace back with face text
+      cel.innerHTML = '';
+      const face = el('div','card-face card-front'); face.textContent = computerHand[idx].isJoker ? 'J' : computerHand[idx].val;
+      const back = el('div','card-back card-backside'); back.textContent = '';
+      cel.appendChild(face); cel.appendChild(back);
+    }
+    appendLog(`<strong>컴퓨터 카드 ${idx+1}번이 공개되었습니다.</strong>`);
+    updateUI();
+  }
+
+  // parse guess input: accept 'J' or numeric 0-11
+  function parseGuess(raw){
+    if(!raw) return null;
+    raw = String(raw).trim();
+    if(raw.toLowerCase() === 'j') return {isJoker:true};
+    const n = Number(raw);
+    if(Number.isInteger(n) && n>=0 && n<=11) return {isJoker:false, val:n};
+    return null;
+  }
+
+  // player guess handler
+  guessBtn.addEventListener('click', ()=>{
+    if(turn !== 'player'){ appendLog('지금은 플레이어 턴이 아닙니다.'); return; }
+    const idx = Number(targetIdxIn.value) - 1;
+    const parsed = parseGuess(guessValIn.value);
+    if(Number.isNaN(idx) || idx < 0 || idx >= cardCount){ appendLog('유효한 타겟 인덱스를 입력하세요.'); return; }
+    if(!parsed){ appendLog('예상 값은 0~11 또는 J(조커)로 입력하세요.'); return; }
+    if(computerRevealed[idx]){ appendLog('이미 공개된 카드입니다.'); return; }
+    // check
+    const actual = computerHand[idx];
+    let correct = false;
+    if(parsed.isJoker){
+      if(actual.isJoker) correct = true;
+    } else {
+      if(!actual.isJoker && actual.val === parsed.val) correct = true;
+    }
+    if(correct){
+      revealComputerCard(idx);
+      appendLog(`<strong>정답!</strong> 컴퓨터 ${idx+1}번 카드를 맞혔습니다. 계속 가능.`);
+      // check win
+      if(checkWin()) return;
+      // player continues
+      updateUI();
+    } else {
+      appendLog(`<em>틀렸습니다.</em> 당신의 추측: ${guessValIn.value}`);
+      // turn switches
+      turn = 'computer';
+      updateUI();
+      setTimeout(computerTurn, 700);
+    }
+  });
+
+  // computer AI turn
+  const aiMemory = { guessed: new Set() };
+  function computerTurn(){
+    if(turn !== 'computer') return;
+    appendLog('<em>컴퓨터가 생각 중...</em>');
+    // pick an unrevealed player card
+    const candidates = [];
+    for(let i=0;i<cardCount;i++) if(!playerRevealed[i]) candidates.push(i);
+    if(candidates.length === 0){ checkWin(); return; }
+    const targetIdx = candidates[Math.floor(Math.random()*candidates.length)];
+    // choose guess
+    let guess;
+    if(aiLevel === 'easy'){ guess = (Math.random()<0.08) ? {isJoker:true} : {isJoker:false, val: Math.floor(Math.random()*12)}; }
+    else if(aiLevel === 'normal'){
+      // bias away from its own cards
+      const forbidden = new Set(computerHand.filter(c=>!c.isJoker).map(c=>c.val));
+      if(Math.random()<0.12) guess = {isJoker:true};
+      else {
+        let tries=0; let val;
+        do { val = Math.floor(Math.random()*12); tries++; } while(forbidden.has(val) && tries<20);
+        guess = {isJoker:false, val};
+      }
+    } else {
+      // hard: prefer values not in its own hand
+      const forbidden = new Set(computerHand.filter(c=>!c.isJoker).map(c=>c.val));
+      let pool = [];
+      for(let v=0;v<=11;v++) if(!forbidden.has(v)) pool.push(v);
+      if(pool.length===0) pool = Array.from({length:12},(_,i)=>i);
+      const val = pool[Math.floor(Math.random()*pool.length)];
+      guess = (Math.random()<0.06) ? {isJoker:true} : {isJoker:false, val};
+    }
+    aiMemory.guessed.add(`${targetIdx}:${guess.isJoker? 'J': guess.val}`);
+    setTimeout(()=>{
+      appendLog(`<em>컴퓨터: ${targetIdx+1}번 카드를 ${guess.isJoker? 'J':''+guess.val} 라고 추측했습니다.</em>`);
+      const actual = playerHand[targetIdx];
+      let ok = false;
+      if(guess.isJoker){
+        if(actual.isJoker) ok = true;
+      } else {
+        if(!actual.isJoker && actual.val === guess.val) ok = true;
+      }
+      if(ok){
+        playerRevealed[targetIdx] = true;
+        // reveal in UI
+        const cel = playerRow.children[targetIdx];
+        if(cel){ cel.classList.add('revealed'); }
+        appendLog('<strong>컴퓨터 정답!</strong> 당신의 카드가 공개되었습니다.');
+        if(checkWin()) return;
+        setTimeout(computerTurn, 700); // computer continues
+      } else {
+        appendLog('<em>컴퓨터 추측 실패. 플레이어 차례로 전환.</em>');
+        turn = 'player';
+        updateUI();
+      }
+    }, 900);
+  }
+
+  // check win
+  function checkWin(){
+    const pLeft = playerRevealed.filter(x=>!x).length;
+    const cLeft = computerRevealed.filter(x=>!x).length;
+    if(cLeft === 0){
+      appendLog('<strong>플레이어 승리! 컴퓨터의 카드 전부 맞힘.</strong>');
+      turn = 'ended'; updateUI(); return true;
+    }
+    if(pLeft === 0){
+      appendLog('<strong>컴퓨터 승리! 당신의 카드 전부 맞음.</strong>');
+      turn = 'ended'; updateUI(); return true;
+    }
+    return false;
+  }
+
+  // debug reveal button
+  revealBtn.addEventListener('click', ()=>{
+    for(let i=0;i<computerHand.length;i++) revealComputerCard(i);
+  });
+
+  // placement mode toggle
+  placeJokerBtn.addEventListener('click', ()=>{
+    jokerPlaceMode = !jokerPlaceMode;
+    placeJokerBtn.textContent = jokerPlaceMode ? '조커 배치: ON (드래그)' : '조커 배치 모드';
+    appendLog(jokerPlaceMode ? '조커 배치 모드로 전환되었습니다. 조커를 드래그하여 슬롯에 놓으세요.' : '조커 배치 모드 종료.');
+  });
+
+  // new game handler
+  newBtn.addEventListener('click', ()=>{
+    // reset
+    playerRow.innerHTML = '';
+    computerRow.innerHTML = '';
+    deckArea.innerHTML = '';
+    logEl.innerHTML = '';
+    appResetUI();
+    startNewGame();
+  });
+
+  function appResetUI(){
+    deck = [];
+    playerHand = []; computerHand = [];
+    playerRevealed = []; computerRevealed = [];
+    turn = 'player';
+    updateUI();
+  }
+
+  // initial set
+  function startNewGame(){
+    appendLog('게임 시작 — 덱을 구성하고 섞습니다...');
+    deck = buildDeck();
+    randShuffle(deck);
+    // small scatter
+    renderDeckScatter();
+    // after a moment, deal and animate
+    setTimeout(()=> {
+      // took top 2*cardCount in deck
+      const total = cardCount * 2;
+      const taken = deck.slice(0, total);
+      randShuffle(taken);
+      playerHand = taken.slice(0, cardCount);
+      computerHand = taken.slice(cardCount, total);
+      // sort hands per rule
+      playerHand = sortHand(playerHand);
+      computerHand = sortHand(computerHand);
+      playerRevealed = Array(cardCount).fill(true); // player sees own
+      computerRevealed = Array(cardCount).fill(false);
+      animateDeal(()=>{
+        appendLog('섞기와 분배가 완료되었습니다.');
+        appendLog('원하면 조커 배치 모드에서 조커 위치를 바꿀 수 있습니다.');
+        updateUI();
+      });
+    }, 900);
+  }
+
+  // initial UI
+  appendLog('환영합니다 — 새 게임을 눌러 시작하세요.');
+  updateUI();
+
+  // utility to calculate half width var
+  function varCardHalf(){ return (parseInt(getComputedStyle(document.documentElement).getPropertyValue('--card-w')) || 72)/2; }
+
+  // expose for debug/test
+  window._dv = {
+    state: ()=>({playerHand, computerHand, playerRevealed, computerRevealed, turn})
+  };
+
+})();
+</script>
+</body>
+</html>    </header><section class="board">
   <div class="controls">
     <label>카드 수: <select id="cardCount"><option>4</option><option selected>6</option><option>8</option></select></label>
     <label>컴퓨터 난이도: <select id="aiLevel"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select></label>
