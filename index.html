@@ -1,0 +1,215 @@
+<!doctype html>
+
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>다빈치 코드 — 1대1</title>
+<style>
+  :root{--bg:#0b0f14;--card:#f8f8f4;--dark:#101217;--accent:#c75b7a}
+  html,body{height:100%;margin:0;font-family:Inter, 'Noto Sans KR', system-ui; background:linear-gradient(180deg,#071018 0%, #0b1116 100%);color:#eef2f6}
+  .wrap{max-width:980px;margin:28px auto;padding:18px}
+  header{display:flex;align-items:center;justify-content:space-between}
+  h1{margin:0;font-size:1.4rem}
+  .board{display:flex;flex-direction:column;gap:18px;margin-top:18px}
+  .players{display:flex;justify-content:space-between;gap:12px}
+  .player{flex:1;background:rgba(255,255,255,0.03);padding:14px;border-radius:12px;border:1px solid rgba(255,255,255,0.04)}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .card{width:68px;height:96px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;box-shadow:0 6px 18px rgba(0,0,0,0.6);cursor:pointer;user-select:none}
+  .card.front{background:var(--card);color:#111;border:2px solid rgba(0,0,0,0.06)}
+  .card.back{background:linear-gradient(180deg,#2b2e35,#1b1d22);color:#fff;border:2px solid rgba(255,255,255,0.03);position:relative}
+  .card.revealed{opacity:0.48;transform:scale(0.98);cursor:default}
+  .controls{display:flex;gap:12px;align-items:center}
+  select,input[type=number]{padding:8px;border-radius:8px;border:1px solid rgba(255,255,255,0.06);background:rgba(0,0,0,0.28);color:#eef2f6}
+  button{padding:8px 12px;border-radius:8px;background:linear-gradient(180deg,#ba3a45,#8b2430);color:white;border:none;cursor:pointer}
+  .log{margin-top:12px;background:rgba(0,0,0,0.25);padding:12px;border-radius:8px;min-height:80px}
+  .status{margin-top:6px;color:#b7c3cc;font-size:14px}
+  .small{font-size:13px;color:#aab5bf}
+  /* responsive */
+  @media (max-width:720px){.card{width:56px;height:80px;font-size:18px}}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <h1>다빈치 코드 — 1대1 (컴퓨터 상대)</h1>
+      <div class="small">카드 0~11 중 숫자를 추리하세요. 컴퓨터 난이도 선택 가능</div>
+    </header><section class="board">
+  <div class="controls">
+    <label>카드 수: <select id="cardCount"><option>4</option><option selected>6</option><option>8</option></select></label>
+    <label>컴퓨터 난이도: <select id="aiLevel"><option value="easy">쉬움</option><option value="normal" selected>보통</option><option value="hard">어려움</option></select></label>
+    <button id="newBtn">새 게임 시작</button>
+  </div>
+
+  <div class="players">
+    <div class="player" id="computerArea">
+      <div class="small">컴퓨터의 카드 (뒷면)</div>
+      <div class="row" id="computerCards"></div>
+    </div>
+
+    <div class="player" id="playerArea">
+      <div class="small">당신의 카드 (앞면)</div>
+      <div class="row" id="playerCards"></div>
+    </div>
+  </div>
+
+  <div class="controls" style="margin-top:8px">
+    <label>타겟 카드 인덱스 (1~): <input id="targetIdx" type="number" min="1" style="width:70px"/></label>
+    <label>예상 숫자: <input id="guessVal" type="number" min="0" style="width:70px"/></label>
+    <button id="guessBtn">추측</button>
+    <div style="margin-left:auto" class="small">턴: <span id="turnLabel">플레이어</span></div>
+  </div>
+
+  <div class="log" id="log"></div>
+  <div class="status" id="status"></div>
+</section>
+
+  </div><script>
+(function(){
+  // 게임 상태
+  let cardCount = 6;
+  let aiLevel = 'normal';
+  let playerCards = [];
+  let computerCards = [];
+  let playerRevealed = []; // boolean
+  let computerRevealed = [];
+  let numbersPool = []; // 0..11 shuffled
+  let turn = 'player'; // or 'computer'
+
+  // DOM
+  const computerCardsEl = document.getElementById('computerCards');
+  const playerCardsEl = document.getElementById('playerCards');
+  const logEl = document.getElementById('log');
+  const statusEl = document.getElementById('status');
+  const turnLabel = document.getElementById('turnLabel');
+  const cardCountSel = document.getElementById('cardCount');
+  const aiLevelSel = document.getElementById('aiLevel');
+  const newBtn = document.getElementById('newBtn');
+  const guessBtn = document.getElementById('guessBtn');
+  const targetIdxIn = document.getElementById('targetIdx');
+  const guessValIn = document.getElementById('guessVal');
+
+  function randShuffle(arr){ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]] } }
+
+  function init(){
+    cardCount = Number(cardCountSel.value);
+    aiLevel = aiLevelSel.value;
+    numbersPool = [];
+    for(let i=0;i<12;i++) numbersPool.push(i);
+    randShuffle(numbersPool);
+    // take first 2*cardCount numbers
+    const taken = numbersPool.slice(0, cardCount*2);
+    randShuffle(taken);
+    playerCards = taken.slice(0,cardCount).sort((a,b)=>a-b); // sorted as in real rules
+    computerCards = taken.slice(cardCount, cardCount*2).sort((a,b)=>a-b);
+    playerRevealed = Array(cardCount).fill(false);
+    computerRevealed = Array(cardCount).fill(false);
+    turn = 'player';
+    render();
+    appendLog('새 게임 시작! 카드를 섞고 분배했습니다.');
+    setStatus();
+  }
+
+  function render(){
+    // render player cards (face up)
+    playerCardsEl.innerHTML = '';
+    playerCards.forEach((num,i)=>{
+      const d = document.createElement('div'); d.className='card front'+(playerRevealed[i]?' revealed':''); d.textContent = playerRevealed[i]? num : num; // always visible to player
+      if(playerRevealed[i]) d.style.opacity=0.6;
+      playerCardsEl.appendChild(d);
+    });
+    // render computer cards (back unless revealed)
+    computerCardsEl.innerHTML = '';
+    computerCards.forEach((num,i)=>{
+      const d = document.createElement('div');
+      if(computerRevealed[i]){ d.className='card front revealed'; d.textContent = num; d.style.opacity=0.6; }
+      else { d.className='card back'; d.innerHTML = '<div style="font-size:12px;opacity:0.85">뒷면</div>'; }
+      computerCardsEl.appendChild(d);
+    });
+  }
+
+  function appendLog(txt){ const p=document.createElement('div'); p.innerHTML=txt; logEl.appendChild(p); logEl.scrollTop=logEl.scrollHeight; }
+  function setStatus(){ turnLabel.textContent = turn==='player'?'플레이어':'컴퓨터'; statusEl.textContent = `남은 카드 - 플레이어: ${playerRevealed.filter(x=>!x).length}, 컴퓨터: ${computerRevealed.filter(x=>!x).length}` }
+
+  function checkWin(){ const pLeft = playerRevealed.filter(x=>!x).length; const cLeft = computerRevealed.filter(x=>!x).length; if(cLeft===0){ appendLog('<strong>플레이어 승리! 컴퓨터의 모든 카드를 맞췄습니다.</strong>'); turn='ended'; setStatus(); return true } if(pLeft===0){ appendLog('<strong>컴퓨터 승리! 당신의 모든 카드를 맞췄습니다.</strong>'); turn='ended'; setStatus(); return true } return false }
+
+  // 플레이어 추측
+  guessBtn.addEventListener('click', ()=>{
+    if(turn!=='player') { appendLog('지금은 플레이어 턴이 아닙니다.'); return }
+    const idx = Number(targetIdxIn.value)-1;
+    const val = Number(guessValIn.value);
+    if(Number.isNaN(idx) || Number.isNaN(val)) { appendLog('타겟 인덱스와 숫자를 입력하세요.'); return }
+    if(idx<0 || idx>=cardCount){ appendLog('유효한 카드 인덱스를 입력하세요.'); return }
+    if(val<0 || val>11){ appendLog('숫자는 0~11 사이이어야 합니다.'); return }
+    if(computerRevealed[idx]){ appendLog('이미 공개된 카드입니다. 다른 카드를 선택하세요.'); return }
+    // check
+    if(computerCards[idx] === val){
+      computerRevealed[idx]=true; render(); appendLog(`<strong>정답!</strong> ${idx+1}번 카드의 숫자는 ${val}였습니다. 계속 추측하세요.`);
+      if(checkWin()) return;
+      // player continues
+      setStatus();
+    } else {
+      appendLog(`<em>틀렸습니다.</em> ${idx+1}번 카드는 ${val}가 아닙니다.`);
+      // switch to computer turn
+      turn='computer'; setStatus(); setTimeout(computerTurn,800);
+    }
+  });
+
+  // 간단한 컴퓨터 AI
+  const aiMemory = { guessed: new Set() }; // track (idx,val) guesses as string
+
+  function computerTurn(){
+    if(turn !== 'computer') return;
+    appendLog('<em>컴퓨터의 턴...</em>');
+    // AI chooses target index
+    const candidates = [];
+    for(let i=0;i<cardCount;i++) if(!playerRevealed[i]) candidates.push(i);
+    if(candidates.length===0){ checkWin(); return }
+    let targetIdx = candidates[Math.floor(Math.random()*candidates.length)];
+
+    // AI chooses value based on difficulty
+    let guessVal;
+    if(aiLevel==='easy'){
+      // random guess 0..11 excluding some seen
+      do{ guessVal = Math.floor(Math.random()*12); }while(aiMemory.guessed.has(`${targetIdx}:${guessVal}`) && aiMemory.guessed.size<200);
+    } else if(aiLevel==='normal'){
+      // bias: try numbers near player's visible smallest/median
+      const visible = playerCards.filter((v,i)=>!playerRevealed[i]);
+      if(visible.length){ const median = visible[Math.floor(visible.length/2)]; guessVal = median + (Math.random()>0.5?1:-1)*Math.floor(Math.random()*3); }
+      if(guessVal===undefined || guessVal<0 || guessVal>11) guessVal = Math.floor(Math.random()*12);
+      while(aiMemory.guessed.has(`${targetIdx}:${guessVal}`)) guessVal = Math.floor(Math.random()*12);
+    } else {
+      // hard: try to avoid impossible numbers: use player's revealed list to narrow pool
+      // heuristic: prefer numbers not in player's own set
+      const forbidden = new Set(playerCards.concat());
+      let tries=0;
+      do{ guessVal = Math.floor(Math.random()*12); tries++; }while(forbidden.has(guessVal) && tries<40 || aiMemory.guessed.has(`${targetIdx}:${guessVal}`));
+    }
+    aiMemory.guessed.add(`${targetIdx}:${guessVal}`);
+    // simulate thinking
+    setTimeout(()=>{
+      appendLog(`<em>컴퓨터가 ${targetIdx+1}번 카드를 ${guessVal}라고 추측했습니다.</em>`);
+      if(playerCards[targetIdx] === guessVal){
+        playerRevealed[targetIdx]=true; render(); appendLog('<strong>컴퓨터 정답!</strong> 당신의 카드가 공개되었습니다. 컴퓨터가 한 번 더 추측합니다.');
+        if(checkWin()) return;
+        setStatus(); setTimeout(computerTurn,700);
+      } else {
+        appendLog('<em>컴퓨터 추측 실패. 플레이어 차례로 반환.</em>');
+        turn='player'; setStatus();
+      }
+    },1000 + Math.floor(Math.random()*600));
+  }
+
+  // init handlers
+  newBtn.addEventListener('click', ()=>{ init(); });
+  cardCountSel.addEventListener('change', ()=>{ /* noop */ });
+  aiLevelSel.addEventListener('change', ()=>{ /* noop */ });
+
+  // start
+  init();
+
+  // expose for debug
+  window._game = { playerCards, computerCards, playerRevealed, computerRevealed };
+})();
+</script></body>
+</html>
